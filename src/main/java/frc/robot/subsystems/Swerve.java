@@ -262,6 +262,15 @@ public class Swerve extends SubsystemBase {
     setModuleStates(moduleStates);
   }
 
+  public boolean isClimbing(double roll) {
+    double setpoint = 0;
+    if (roll >= setpoint){
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   @Override
   public void periodic() {
 
@@ -271,6 +280,8 @@ public class Swerve extends SubsystemBase {
       // Log it and continue
       System.out.println("Warning: Failed to update odometry: " + e.getMessage());
     }*/
+
+    SmartDashboard.getBoolean("isClimbing?", isClimbing(gyro.getRoll().getValueAsDouble()));
 
     swerveOdometry.update(getGyroYaw(), getModulePositions());
 
