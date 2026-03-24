@@ -251,6 +251,5 @@ public final class Constants {
 
   public static final class PoseEstimator {
     public static final Matrix<N3, N1> stateStdDevs = VecBuilder.fill(0.1, 0.1, 0.1);
-    public static final Matrix<N3, N1> visionStdDevs = VecBuilder.fill(0.9, 0.9, 0.9);
   }
 }

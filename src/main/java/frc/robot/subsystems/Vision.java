@@ -1,133 +1,80 @@
 package frc.robot.subsystems;
 
+import java.util.Optional;
+
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Pose3d;
-import edu.wpi.first.math.geometry.Rotation3d;
-import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
-import edu.wpi.first.wpilibj.Alert;
-import edu.wpi.first.wpilibj.Alert.AlertType;
-import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Constants;
 import frc.robot.LimelightHelpers;
-
-import org.littletonrobotics.junction.Logger;
+import frc.robot.LimelightHelpers.PoseEstimate;
 
 public class Vision extends SubsystemBase {
+    private final String name;
+    private final NetworkTable telemetryTable;
+    private final StructPublisher<Pose2d> posePublisher;
+        
 
-  private final VisionConsumer consumer;
-  private final NetworkTable table;
-  private final Alert disconnectedAlert = new Alert("Limelight disconnected", AlertType.kWarning);
+    // public static final Pose2d HubPose = new Pose2d(4.633, 4.040, Rotation2d.fromDegrees(0));
+    // static double targetYaw;
 
-  public Vision(VisionConsumer consumer, String limelightName) {
-    this.consumer = consumer;
-    this.table = NetworkTableInstance.getDefault().getTable(limelightName);
-  }
 
-  @Override
-  public void periodic() {
-    double[] botpose = table.getEntry("botpose_wpiblue").getDoubleArray(new double[6]);
-    double latency = table.getEntry("tl").getDouble(0.0) / 1000.0; // seconds
-
-    double angle = Constants.LimeLightConstants.LIMELIGHT_ANGLE + LimelightHelpers.getTY("limelight");
-    System.out.println(
-        (Constants.LimeLightConstants.TARGET_HEIGHT - Constants.LimeLightConstants.LIMELIGHT_HEIGHT)
-            / Math.tan(Math.toRadians(angle)));
-                                                //Needs to be tuned to a multiplied constant
-    SmartDashboard.putBoolean("InVision?", hasTarget());
-  
-
-    // Reject if no data
-    if (botpose.length < 6) {
-      disconnectedAlert.set(true);
-      return;
-    }
-    disconnectedAlert.set(false);
-
-    Pose3d rawPose3d =
-        new Pose3d(
-            new Translation3d(botpose[0], botpose[1], botpose[2]), // x, y, z
-            new Rotation3d(botpose[3], botpose[4], botpose[5]) // roll, pitch, yaw (radians)
-            );
-
-    boolean rejectPose =
-        rawPose3d.getZ() > VisionConstants.maxZError
-            || rawPose3d.getZ() < -VisionConstants.maxZError
-            || rawPose3d.getX() < 0.0
-            || rawPose3d.getX() > VisionConstants.aprilTagLayout.getFieldLength()
-            || rawPose3d.getY() < 0.0
-            || rawPose3d.getY() > VisionConstants.aprilTagLayout.getFieldWidth();
-
-    if (rejectPose) {
-      Logger.recordOutput(
-          "Vision/RejectedPose",
-          new Pose2d(rawPose3d.getX(), rawPose3d.getY(), rawPose3d.getRotation().toRotation2d()));
-      return;
+    public Vision(String name) {
+        this.name = name;
+        this.telemetryTable = NetworkTableInstance.getDefault().getTable("SmartDashboard/" + name);
+        this.posePublisher = telemetryTable.getStructTopic("Estimated Robot Pose", Pose2d.struct).publish();
     }
 
-    // Conversion to 2d
-    Pose2d visionPose =
-        new Pose2d(rawPose3d.getX(), rawPose3d.getY(), rawPose3d.getRotation().toRotation2d());
+    public Optional<Measurement> getMeasurement(Pose2d currentRobotPose) {
+        LimelightHelpers.SetRobotOrientation(name, currentRobotPose.getRotation().getDegrees(), 0, 0, 0, 0, 0);
 
-    // std devs
-    double distance =
-        Math.sqrt(visionPose.getX() * visionPose.getX() + visionPose.getY() * visionPose.getY());
+        final PoseEstimate poseEstimate_MegaTag1 = LimelightHelpers.getBotPoseEstimate_wpiBlue(name);
+        final PoseEstimate poseEstimate_MegaTag2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(name);
+        if (
+            poseEstimate_MegaTag1 == null 
+                || poseEstimate_MegaTag2 == null
+                || poseEstimate_MegaTag1.tagCount == 0
+                || poseEstimate_MegaTag2.tagCount == 0
+        ) {
+            return Optional.empty();
+        }
 
-     double distancefromHub =
-        Math.hypot(
-            PoseEstimator.HubPose.getX() - visionPose.getX(),
-            PoseEstimator.HubPose.getY() - visionPose.getY());
+        // Combine the readings from MegaTag1 and MegaTag2:
+        // 1. Use the more stable position from MegaTag2
+        // 2. Use the rotation from MegaTag1 (with low confidence) to counteract gyro drift
+        poseEstimate_MegaTag2.pose = new Pose2d(
+            poseEstimate_MegaTag2.pose.getTranslation(),
+            poseEstimate_MegaTag1.pose.getRotation()
+        );
+        final Matrix<N3, N1> standardDeviations = VecBuilder.fill(0.1, 0.1, 10.0);
 
-    double linearStdDev = VisionConstants.linearStdDevBaseline * Math.pow(distance, 0.5);//Math.sqrt(distancefromHub);//Math.pow(distance, 0.5);
-    double angularStdDev = VisionConstants.angularStdDevBaseline * Math.pow(distance, 0.5);//Math.sqrt(distancefromHub);//Math.pow(distance, 0.5);
+        posePublisher.set(poseEstimate_MegaTag2.pose);
 
-    Matrix<N3, N1> stdDevs = VecBuilder.fill(linearStdDev, linearStdDev, angularStdDev);
+        return Optional.of(new Measurement(poseEstimate_MegaTag2, standardDeviations));
+    }
 
-    consumer.accept(visionPose, Timer.getFPGATimestamp() - latency, stdDevs);
+    public static class Measurement {
+        public final PoseEstimate poseEstimate;
+        public final Matrix<N3, N1> standardDeviations;
 
-    Logger.recordOutput("Vision/RobotPose2d", visionPose);
-    Logger.recordOutput("Vision/StdDevs", stdDevs);
-  }
+        public Measurement(PoseEstimate poseEstimate, Matrix<N3, N1> standardDeviations) {
+            this.poseEstimate = poseEstimate;
+            this.standardDeviations = standardDeviations;
+        }
+    }
 
-  public double[] getBotpose() {
-    return table.getEntry("botpose_wpiblue").getDoubleArray(new double[6]);
-}
+    
 
-   public double getDistanceInches() {
-    double ty = LimelightHelpers.getTY("limelight");
+ 
 
-    double angle = Constants.LimeLightConstants.LIMELIGHT_ANGLE + ty;
 
-    return ((Constants.LimeLightConstants.TARGET_HEIGHT
-            - Constants.LimeLightConstants.LIMELIGHT_HEIGHT))
-        / Math.tan(Math.toDegrees(angle));
-                                             //Needs to be tuned to a multiplied constant
-  }
 
-  public boolean hasTarget() {
-    return LimelightHelpers.getTV("limelight");
-  }
-
-  public double getTX() {
-    return LimelightHelpers.getTX("limelight");
-  }
-
-  public double getTY() {
-    return LimelightHelpers.getTY("limelight");
-  }
-
-  @FunctionalInterface
-  public interface VisionConsumer {
-    void accept(
-        Pose2d visionRobotPoseMeters,
-        double timestampSeconds,
-        Matrix<N3, N1> visionMeasurementStdDevs);
-  }
 }

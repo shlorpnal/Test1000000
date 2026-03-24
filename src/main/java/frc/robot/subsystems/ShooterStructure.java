@@ -3,6 +3,7 @@ package frc.robot.subsystems;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
+import frc.robot.LimelightHelpers;
 import frc.robot.subsystems.Shooter.HoodSub;
 import frc.robot.subsystems.Shooter.ShooterSub;
 import frc.robot.subsystems.hopper.SerializerSub;
@@ -12,7 +13,7 @@ public class ShooterStructure extends SubsystemBase {
 
   private ShooterSub shooter;
   private HoodSub hood;
-  private Vision vision;
+  private Swerve swerve;
   private SerializerSub serializer;
 
   private double targetRPM = 0;
@@ -28,10 +29,10 @@ public class ShooterStructure extends SubsystemBase {
   private ShooterState state = ShooterState.IDLE;
 
   public ShooterStructure(
-      ShooterSub shooter, HoodSub hood, Vision vision, SerializerSub serializer) {
+      ShooterSub shooter, HoodSub hood, Swerve swerve, SerializerSub serializer) {
     this.shooter = shooter;
     this.hood = hood;
-    this.vision = vision;
+    this.swerve = swerve;
     this.serializer = serializer;
   }
 
@@ -67,10 +68,10 @@ public class ShooterStructure extends SubsystemBase {
     }
 
     SmartDashboard.putBoolean("Shooter Ready", isReady());
-    SmartDashboard.putBoolean("AtRPM?", atRPM(vision.getDistanceInches()));
+    SmartDashboard.putBoolean("AtRPM?", atRPM(swerve.getDistanceToHub()));
     SmartDashboard.putNumber(
-        "flywheelSetpoint", shooter.getInterpolatedRPM(vision.getDistanceInches()));
-    SmartDashboard.putNumber("hoodSetpoint", hood.getInterpolatedAngle(vision.getDistanceInches()));
+        "flywheelSetpoint", shooter.getInterpolatedRPM(swerve.getDistanceToHub()));
+    SmartDashboard.putNumber("hoodSetpoint", hood.getInterpolatedAngle(swerve.getDistanceToHub()));
   }
 
   private void handleIdle() {
@@ -82,8 +83,8 @@ public class ShooterStructure extends SubsystemBase {
   }
 
   private void handleSpinUp() {
-    double distance = vision.getDistanceInches();
-    if (!vision.hasTarget()) {
+    double distance = swerve.getDistanceToHub();
+    if (!LimelightHelpers.getTV("limelight")) {
       shooter.setRPMFromDistance(80.0);
       hood.setAngleFromDistance(40.0);
     } else {
@@ -98,8 +99,8 @@ public class ShooterStructure extends SubsystemBase {
   }
 
   private void handleReady() {
-    double distance = vision.getDistanceInches();
-    if (!vision.hasTarget()) {
+    double distance = swerve.getDistanceToHub();
+    if (!LimelightHelpers.getTV("limelight")) {
       shooter.setRPMFromDistance(80.0);
       hood.setAngleFromDistance(40.0);
     } else {
@@ -112,9 +113,9 @@ public class ShooterStructure extends SubsystemBase {
   }
 
   private void handleShoot() {
-    double distance = vision.getDistanceInches();
+    double distance = swerve.getDistanceToHub();
 
-    if (!vision.hasTarget()) {
+    if (!LimelightHelpers.getTV("limelight")) {
       shooter.setRPMFromDistance(80.0);
       hood.setAngleFromDistance(40.0);
     } else {

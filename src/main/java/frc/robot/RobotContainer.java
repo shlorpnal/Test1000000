@@ -27,7 +27,7 @@ import frc.robot.subsystems.hopper.SlapdownSub.slapdownStates;
 import frc.robot.autos.manualShot;
 import frc.robot.commands.AutoAim;
 import frc.robot.commands.TeleopSwerve;
-import frc.robot.commands.test.ClimbManual;
+//import frc.robot.commands.test.ClimbManual;
 import frc.robot.commands.test.Flywheel;
 import frc.robot.commands.test.HoodCMD;
 import frc.robot.commands.test.IntakeManual;
@@ -103,41 +103,17 @@ public class RobotContainer {
 
   /* Subsystems */
   private final Swerve s_Swerve = new Swerve();
-  private final PoseEstimator poseEstimator = new PoseEstimator(s_Swerve);
   private final SlapdownSub m_slapdown = new SlapdownSub();
   private final SerializerSub m_serializer = new SerializerSub();
   private final ShooterSub m_flywheel = new ShooterSub();
   private final IndexerSub m_index = new IndexerSub();
   private final HoodSub m_hood = new HoodSub();
   private final IntakeSub m_intake = new IntakeSub();
-  private final Climb m_climb = new Climb();
-
-
-  /* Pose Estimator */
-  /*private final Vision m_vision =
-      new Vision(
-          (pose, timestamp, stdDevs) ->
-              poseEstimator.addVisionMeasurement(pose, timestamp, stdDevs),
-          "limelight");*/
-          
-  private final Vision m_vision = new Vision(
-    new Vision.VisionConsumer() {
-        @Override
-        public void accept(Pose2d pose, double timestamp, Matrix<N3, N1> stdDevs) {
-            poseEstimator.addVisionMeasurement(pose, timestamp, stdDevs);
-        }
-    },
-    "limelight"
-    
-);
-
-  public PoseEstimator getPoseEstimator() {
-    return poseEstimator;
-  }
+  //private final Climb m_climb = new Climb();
 
   private final HopperStructure hopperStructure = new HopperStructure(m_index, m_intake);
   private final ShooterStructure shooterStructure =
-      new ShooterStructure(m_flywheel, m_hood, m_vision, m_serializer);
+      new ShooterStructure(m_flywheel, m_hood, s_Swerve, m_serializer);
 
   private final SendableChooser<Command> autoChooser;
 
@@ -226,8 +202,8 @@ public class RobotContainer {
 
     intakeButton.whileTrue(new IntakeManual(m_intake, -0.9));
 
-    climbUpTest.whileTrue(new ClimbManual(m_climb, 0.3));
-    climbDownTest.whileTrue(new ClimbManual(m_climb, -0.3));
+    //climbUpTest.whileTrue(new ClimbManual(m_climb, 0.3));
+    //climbDownTest.whileTrue(new ClimbManual(m_climb, -0.3));
 
     slapdownUp.whileTrue(new SlapdownManual(m_slapdown, 0.5));
     slapdownDown.whileTrue(new SlapdownManual(m_slapdown, -0.5));
@@ -235,8 +211,7 @@ public class RobotContainer {
     autoAimButton.whileTrue(new AutoAim(s_Swerve, () -> -driver.getRawAxis(translationAxis),
             () -> -driver.getRawAxis(strafeAxis),
             () -> -driver.getRawAxis(rotationAxis),
-            () -> robotCentric.getAsBoolean(),
-            m_vision
+            () -> robotCentric.getAsBoolean()
             ));
 
     /*hoodUpTest.onTrue(new HoodCMD(m_hood, 25));
